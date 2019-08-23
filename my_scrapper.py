@@ -9,23 +9,26 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 import requests
 
+#Llamaremos lista_links a la lista que contiene todas las páginas generales de Urbania
+
 lista_links = []
 for i in range(1,553):
     link = 'https://urbania.pe/buscar/venta-de-casas?page='+str(i)
     lista_links.append(link)
 
-all_internal_link = []
+#LLameremos all_internal_link a los links de cada casas en específico
 def extract_all_internal_links(lista_links):
-    global all_internal_link
-    for link in tqdm(lista_links):
-        response = requests.get(link)
-        soup = BeautifulSoup(response.text, "html.parser")
-        internal_links = ['https://urbania.pe' + link.attrs['href'] 
-                          for link in soup.find('div',{'class':'b-card-wrap js-card-list'}).find_all('a')]
-        all_internal_link = all_internal_link + internal_links
+    all_internal_link = []
+    for link in tqdm(lista_links): #Para cada link en la lista_links
+        response = requests.get(link) #Hago el request
+        soup = BeautifulSoup(response.text, "html.parser") #Creo el objeto 
+        internal_links = ['https://urbania.pe' + link_casa.attrs['href'] 
+                          for link_casa in soup.find('div',{'class':'b-card-wrap js-card-list'}).find_all('a')]
+#        Encuentro cada link de cada casa... 
+        all_internal_link = all_internal_link + internal_links #Sumo los links que encontré a la lista general.
     return all_internal_link
 
-#all_internal_link = extract_all_internal_links(lista_links)
+all_internal_link = extract_all_internal_links(lista_links) #s
 
 #LLena todos los valores nulos del diccionario para que se muestren en el dataframe
 def fill_nan_vals_dict(dictionary):
@@ -34,6 +37,7 @@ def fill_nan_vals_dict(dictionary):
             dict_per_house['NoTieneAlgunDatoExtra'] = 'NingunValor'
         else:
             pass
+
 #Para hacerle el merge a los diccionarios
 def merge(a, b, path=None):
     "merges b into a"
@@ -50,19 +54,30 @@ def merge(a, b, path=None):
             a[key] = b[key]
     return a
 
-dict_all_casas = {}
-def dict_casas_info(soup_cada_casa, i_ = 0):
-    obj_dicc = soup_cada_casa.find('div',{'class':"b-leading-data-property u-flex-wrap"}).find_all(
-            'div',{'class':"b-leading-data-service"}) 
-    dict_casa_iter = {}
-    for iter_ in obj_dicc: #Para cada par de datos (q serían keys & values)
-        a = iter_.find_all('p')[0].text #Bótame el texto primero (key)
-        b = iter_.find_all('p')[1].text #Bótame el texto segundo (value)
-        dict_casa_iter[a] = b
-    global dict_all_casas
-    dict_all_casas['Casa'+str(i_)] = dict_casa_iter
-    return dict_all_casas    
+# En este caso, soup_cada_casa hace referencia al soup que se creará más adelante cuando
+# se itere por todas los links de las casas. 
 
+
+dict_all_casas = {}
+#La siguiente función se iterará por sobre cada casa (o link de casa)
+#Retornará un diccionario de diccionarios (Por eso creamos dos dict)
+dict_divs_info = {}
+def scrap_div_info(soup_cada_casa, o_ = 0): #Para cada casa, sacame esta info.
+    direccion_ = soup_cada_casa.find('div',{'class': 'b-ubication'}).find_all('p')[0].text
+    if soup_cada_casa.find('div',{'class':'b-name-agent'}) == None:
+        anunciante_ = 'No disponible'
+    else:
+        anunciante_ = soup_cada_casa.find('div',{'class':'b-name-agent'}).find_all('p')[0].text
+    florito_ = soup_cada_casa.find('div',{'class':'b-section-content js-property-services'}).findNext('div').find('p').text
+    fecha_pub = soup_cada_casa.find('div',{'class':'b-view-code'}).findNext('span').text
+    precio = soup_cada_casa.find('p',{'class':'e-totalPrice'}).text
+    #visitas_ = soup_cada_casa.find('div',{'class':'b-view-code'}).find_all('span')[1].text
+    global dict_divs_info
+    dict_SUB_divs_info = {'Direccion':direccion_,'Anunciante':anunciante_,'Descripcion_':florito_,
+                          'Fecha_pub':fecha_pub, 'Precio': precio}
+    dict_divs_info['Casa'+str(o_)] = dict_SUB_divs_info
+    #fill_nan_vals_dict(dict_divs_info)
+    return dict_divs_info
 
 dict_divs_info = {}
 def scrap_div_info(soup_cada_casa, o_ = 0): #Para cada casa, sacame esta info.
@@ -78,7 +93,7 @@ def scrap_div_info(soup_cada_casa, o_ = 0): #Para cada casa, sacame esta info.
     dict_divs_info['Casa'+str(o_)] = dict_SUB_divs_info
     fill_nan_vals_dict(dict_divs_info)
     return dict_divs_info
-
+#Nos retornará un dict de dicts, con los mismos keys pero diferentes values (diccionarios también)
 
 #Se esta reemplazando elm:section,a:features,lista_b:sub_feature
 dict_feature_all_casas = {} #Si pongo esto dentro del loop siempre va a crear uno nuevo.
